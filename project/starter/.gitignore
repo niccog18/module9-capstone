@@ -1,0 +1,27 @@
+# Environment / secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Databases
+*.db
+*.sqlite3
+data/
+
+# ChromaDB
+rag_db/
+chroma_data/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/

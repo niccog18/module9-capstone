@@ -1,0 +1,15 @@
+# Fill this in as you add dependencies. Suggested starting point (uncomment
+# and pin versions as needed):
+#
+# fastapi
+# uvicorn
+# sqlalchemy
+# pydantic
+# python-jose[cryptography]
+# passlib[bcrypt]
+# pytest
+# httpx
+# chromadb
+# sentence-transformers
+# requests          # for calling Ollama, or an OpenAI/other SDK
+# python-dotenv

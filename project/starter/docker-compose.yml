@@ -1,0 +1,58 @@
+# docker-compose.yml  (STARTER)
+# =================================
+# Defines the services your capstone needs. At minimum: backend + frontend.
+# Add chromadb and/or ollama as their own services if you don't want to
+# embed them in the backend container. Run everything with:
+#
+#   docker-compose up --build
+#
+# TODO: Complete each service definition below.
+# Refer to Module 8 (Docker Compose lessons) for guidance.
+
+services:
+
+  # ── Backend — FastAPI + SQLAlchemy + JWT auth + RAG pipeline ─────────────
+  backend:
+    # TODO: build: ./backend
+    ports:
+      - "8000:8000"
+    # TODO: env_file:
+    #   - .env
+    # TODO: Add named volumes so your database and ChromaDB data survive restarts
+    #   volumes:
+    #     - db_data:/app/data
+    #     - chroma_data:/app/rag_db
+    # TODO: depends_on: [ollama] and/or [chromadb] if you split them out as services
+
+  # ── Frontend — Streamlit UI ───────────────────────────────────────────────
+  frontend:
+    # TODO: build: ./frontend
+    ports:
+      - "8501:8501"
+    # TODO: Set BACKEND_URL so the frontend reaches the backend by service name
+    #   environment:
+    #     - BACKEND_URL=http://backend:8000
+    # TODO: depends_on: [backend]
+
+  # ── Optional: ChromaDB as its own service (instead of embedding it) ──────
+  # chromadb:
+  #   image: chromadb/chroma:latest
+  #   ports:
+  #     - "8001:8000"
+  #   volumes:
+  #     - chroma_data:/chroma/chroma
+
+  # ── Optional: Ollama as its own service (instead of running on the host) ─
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+
+# ── Named volumes ─────────────────────────────────────────────────────────
+# TODO: Declare the named volumes you referenced above
+# volumes:
+#   db_data:
+#   chroma_data:
+#   ollama_data:

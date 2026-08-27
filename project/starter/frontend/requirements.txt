@@ -1,0 +1,5 @@
+# Fill this in as you add dependencies. Suggested starting point (uncomment
+# and pin versions as needed):
+#
+# streamlit
+# requests
