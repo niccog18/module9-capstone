@@ -12,8 +12,8 @@ TODO: import your Base from database.py and define your models.
 """
 
 # TODO: from database import Base
-# TODO: from sqlalchemy import Column, Integer, String, ForeignKey
-# TODO: from sqlalchemy.orm import relationship
+# TODO: from sqlalchemy import String, ForeignKey
+# TODO: from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 # TODO: class User(Base): ...
 # TODO: class <YourEntity>(Base): ...  # related to User via a ForeignKey
