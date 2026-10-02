@@ -1,58 +1,53 @@
-# docker-compose.yml  (STARTER)
-# =================================
-# Defines the services your capstone needs. At minimum: backend + frontend.
-# Add chromadb and/or ollama as their own services if you don't want to
-# embed them in the backend container. Run everything with:
-#
-#   docker-compose up --build
-#
-# TODO: Complete each service definition below.
-# Refer to Module 8 (Docker Compose lessons) for guidance.
+# Local development stack. Copy .env.example to .env before running:
+#   docker compose up --build
+# Compose reads .env automatically for the ${...} values below.
 
 services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # $$ defers expansion to the container's own environment.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # ── Backend — FastAPI + SQLAlchemy + JWT auth + RAG pipeline ─────────────
   backend:
-    # TODO: build: ./backend
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: "true"  # includes pytest so `docker compose exec backend pytest` works
+    env_file:
+      - .env
     ports:
       - "8000:8000"
-    # TODO: env_file:
-    #   - .env
-    # TODO: Add named volumes so your database and ChromaDB data survive restarts
-    #   volumes:
-    #     - db_data:/app/data
-    #     - chroma_data:/app/rag_db
-    # TODO: depends_on: [ollama] and/or [chromadb] if you split them out as services
+    volumes:
+      # Development only: live-reload from the host. Remove this mount and
+      # the --reload flag for a production deployment.
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # /health returns 503 when the database is unreachable, which makes
+      # urlopen raise and the check fail.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
-  # ── Frontend — Streamlit UI ───────────────────────────────────────────────
-  frontend:
-    # TODO: build: ./frontend
-    ports:
-      - "8501:8501"
-    # TODO: Set BACKEND_URL so the frontend reaches the backend by service name
-    #   environment:
-    #     - BACKEND_URL=http://backend:8000
-    # TODO: depends_on: [backend]
-
-  # ── Optional: ChromaDB as its own service (instead of embedding it) ──────
-  # chromadb:
-  #   image: chromadb/chroma:latest
-  #   ports:
-  #     - "8001:8000"
-  #   volumes:
-  #     - chroma_data:/chroma/chroma
-
-  # ── Optional: Ollama as its own service (instead of running on the host) ─
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-
-# ── Named volumes ─────────────────────────────────────────────────────────
-# TODO: Declare the named volumes you referenced above
-# volumes:
-#   db_data:
-#   chroma_data:
-#   ollama_data:
+volumes:
+  postgres_data:

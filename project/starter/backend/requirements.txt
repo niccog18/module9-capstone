@@ -1,15 +1,26 @@
-# Fill this in as you add dependencies. Suggested starting point (uncomment
-# and pin versions as needed):
-#
-# fastapi
-# uvicorn
-# sqlalchemy
-# pydantic
-# python-jose[cryptography]
-# passlib[bcrypt]
-# pytest
-# httpx
-# chromadb
-# sentence-transformers
-# requests          # for calling Ollama, or an OpenAI/other SDK
-# python-dotenv
+# Runtime dependencies for the backend API.
+# Test tooling lives in requirements-dev.txt so production images stay small.
+
+# Web framework and server
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+python-multipart>=0.0.20,<1.0  # OAuth2 login form (/api/v1/auth/login)
+
+# Database
+# DATABASE_URL must use the psycopg 3 driver prefix: postgresql+psycopg://...
+# (a plain postgresql:// URL makes SQLAlchemy look for psycopg2 instead).
+sqlalchemy>=2.0,<3.0
+psycopg[binary]>=3.2,<4.0
+alembic>=1.13,<2.0
+
+# Validation
+pydantic>=2.10,<3.0
+email-validator>=2.2,<3.0  # required by pydantic's EmailStr
+
+# Authentication
+# Install PyJWT, not the unrelated "jwt" package, and not python-jose.
+PyJWT>=2.10,<3.0
+pwdlib[argon2]>=0.2,<1.0
+
+# RAG dependencies (chromadb, an Ollama client, ...) are added with the
+# Module 9 RAG files.

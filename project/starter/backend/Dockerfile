@@ -1,26 +1,24 @@
-# backend/Dockerfile  (STARTER)
-# ================================
-# TODO: Complete this Dockerfile so the backend can run inside Docker.
-# Refer to Module 8's Dockerfile Creation lesson for guidance.
-#
-# Steps to implement:
-#   1. Choose a base image — python:3.11-slim is a good choice
-#   2. Set a working directory (e.g. /app)
-#   3. Copy requirements.txt and install dependencies with pip
-#   4. Copy the rest of the source code
-#   5. Expose the port uvicorn will listen on (8000)
-#   6. Set the CMD to start uvicorn
-#      Hint: uvicorn main:app --host 0.0.0.0 --port 8000
+FROM python:3.13-slim
 
-# TODO: FROM ...
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# TODO: WORKDIR ...
+WORKDIR /app
 
-# TODO: COPY requirements.txt .
-# TODO: RUN pip install ...
+# Install dependencies first so this layer is cached until requirements change.
+ARG INSTALL_DEV=false
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+    && if [ "$INSTALL_DEV" = "true" ]; then \
+         pip install --no-cache-dir -r requirements-dev.txt; \
+       fi
 
-# TODO: COPY . .
+COPY . .
 
-# TODO: EXPOSE ...
+# Run as an unprivileged user.
+RUN useradd --create-home appuser && chown -R appuser /app
+USER appuser
 
-# TODO: CMD [...]
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
