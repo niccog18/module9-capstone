@@ -80,7 +80,7 @@ def verify_password(
 
 # Relative URL (no leading slash) so docs keep working behind a path prefix.
 # Must match the real login route.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def create_access_token(
