@@ -4,38 +4,37 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    Depends,
     FastAPI,
     HTTPException,
-    Query,
     Response,
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
-from routers.auth import router as auth_router
 from auth import CurrentUser
-from database import Base, engine, get_db
+from database import Base, engine
+from dependencies import (
+    DatabaseSession,
+    Limit,
+    Offset,
+    get_visible_exercise_or_404,
+)
 from models import (
-    Exercise,
     PlanExercise,
     PlanSession,
     User,
-    Workout,
-    WorkoutExercise,
     WorkoutPlan,
 )
+from routers.auth import router as auth_router
+from routers.exercises import router as exercises_router
+from routers.workouts import router as workouts_router
 from schemas import (
-    ExerciseCreate,
-    ExerciseResponse,
-    ExerciseUpdate,
     HealthResponse,
     PlanExerciseCreate,
     PlanExerciseResponse,
@@ -44,17 +43,10 @@ from schemas import (
     PlanSessionDetailResponse,
     PlanSessionResponse,
     PlanSessionUpdate,
-    WorkoutCreate,
-    WorkoutDetailResponse,
-    WorkoutExerciseCreate,
-    WorkoutExerciseResponse,
-    WorkoutExerciseUpdate,
     WorkoutPlanCreate,
     WorkoutPlanDetailResponse,
     WorkoutPlanResponse,
     WorkoutPlanUpdate,
-    WorkoutResponse,
-    WorkoutUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -121,22 +113,6 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# Dependency aliases and shared query parameters
-# ---------------------------------------------------------------------------
-
-
-DatabaseSession = Annotated[Session, Depends(get_db)]
-
-Limit = Annotated[
-    int,
-    Query(ge=1, le=500, description="Maximum number of items to return."),
-]
-Offset = Annotated[
-    int,
-    Query(ge=0, description="Number of items to skip."),
-]
-
 # All versioned API routes hang off this router; only the root and health
 # endpoints live outside /api/v1.
 router = APIRouter(prefix="/api/v1")
@@ -148,80 +124,6 @@ router = APIRouter(prefix="/api/v1")
 #
 # Resources owned by another user are reported as 404 rather than 403 so the
 # API does not reveal which IDs exist.
-
-
-def get_owned_workout_or_404(
-    db: Session,
-    workout_id: int,
-    current_user: User,
-) -> Workout:
-    """Return a workout owned by the user, or raise 404."""
-
-    workout = db.scalar(
-        select(Workout).where(
-            Workout.workout_id == workout_id,
-            Workout.user_id == current_user.user_id,
-        )
-    )
-
-    if workout is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workout not found.",
-        )
-
-    return workout
-
-
-def get_visible_exercise_or_404(
-    db: Session,
-    exercise_id: int,
-    current_user: User,
-) -> Exercise:
-    """Return a system exercise or one of the user's custom exercises.
-
-    Other users' custom exercises are reported as 404.
-    """
-
-    exercise = db.scalar(
-        select(Exercise).where(
-            Exercise.exercise_id == exercise_id,
-            or_(
-                Exercise.user_id.is_(None),
-                Exercise.user_id == current_user.user_id,
-            ),
-        )
-    )
-
-    if exercise is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Exercise not found.",
-        )
-
-    return exercise
-
-
-def get_owned_exercise_or_404(
-    db: Session,
-    exercise_id: int,
-    current_user: User,
-) -> Exercise:
-    """Return a custom exercise the user may modify.
-
-    System exercises are visible but read-only (403). Other users' custom
-    exercises are reported as 404.
-    """
-
-    exercise = get_visible_exercise_or_404(db, exercise_id, current_user)
-
-    if exercise.user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="System exercises cannot be modified.",
-        )
-
-    return exercise
 
 
 def get_owned_plan_or_404(
@@ -302,34 +204,6 @@ def get_plan_exercise_or_404(
     return plan_exercise
 
 
-def get_workout_exercise_or_404(
-    db: Session,
-    workout_id: int,
-    workout_exercise_id: int,
-) -> WorkoutExercise:
-    """Return an exercise entry within a workout, or raise 404.
-
-    The caller must already have verified ownership of the workout.
-    """
-
-    workout_exercise = db.scalar(
-        select(WorkoutExercise)
-        .options(selectinload(WorkoutExercise.exercise))
-        .where(
-            WorkoutExercise.workout_id == workout_id,
-            WorkoutExercise.workout_exercise_id == workout_exercise_id,
-        )
-    )
-
-    if workout_exercise is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Exercise entry not found in this workout.",
-        )
-
-    return workout_exercise
-
-
 # ---------------------------------------------------------------------------
 # Root and health endpoints
 # ---------------------------------------------------------------------------
@@ -377,432 +251,6 @@ def health_check(
         ollama="not_checked",
         chromadb="not_checked",
     )
-
-
-# ---------------------------------------------------------------------------
-# Workout endpoints
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/workouts",
-    response_model=WorkoutResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=["Workouts"],
-)
-def create_workout(
-    workout_data: WorkoutCreate,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> Workout:
-    """Create a workout owned by the authenticated user."""
-
-    workout = Workout(
-        user_id=current_user.user_id,
-        workout_date=workout_data.workout_date,
-        duration_minutes=workout_data.duration_minutes,
-        notes=workout_data.notes,
-    )
-
-    db.add(workout)
-    db.commit()
-    db.refresh(workout)
-
-    return workout
-
-
-@router.get(
-    "/workouts",
-    response_model=list[WorkoutResponse],
-    tags=["Workouts"],
-)
-def get_workouts(
-    current_user: CurrentUser,
-    db: DatabaseSession,
-    limit: Limit = 100,
-    offset: Offset = 0,
-) -> list[Workout]:
-    """Return the authenticated user's workouts, newest first."""
-
-    statement = (
-        select(Workout)
-        .where(Workout.user_id == current_user.user_id)
-        .order_by(
-            Workout.workout_date.desc(),
-            Workout.workout_id.desc(),
-        )
-        .limit(limit)
-        .offset(offset)
-    )
-
-    return list(db.scalars(statement).all())
-
-
-@router.get(
-    "/workouts/{workout_id}",
-    response_model=WorkoutDetailResponse,
-    tags=["Workouts"],
-)
-def get_workout(
-    workout_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> Workout:
-    """Return one workout with its exercises."""
-
-    statement = (
-        select(Workout)
-        .options(
-            selectinload(Workout.workout_exercises).selectinload(
-                WorkoutExercise.exercise
-            )
-        )
-        .where(
-            Workout.workout_id == workout_id,
-            Workout.user_id == current_user.user_id,
-        )
-    )
-
-    workout = db.scalar(statement)
-
-    if workout is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workout not found.",
-        )
-
-    return workout
-
-
-@router.patch(
-    "/workouts/{workout_id}",
-    response_model=WorkoutResponse,
-    tags=["Workouts"],
-)
-def update_workout(
-    workout_id: int,
-    workout_data: WorkoutUpdate,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> Workout:
-    """Update a workout owned by the authenticated user.
-
-    Only the fields included in the request body are changed.
-    """
-
-    workout = get_owned_workout_or_404(db, workout_id, current_user)
-
-    update_data = workout_data.model_dump(exclude_unset=True)
-
-    for field_name, value in update_data.items():
-        setattr(workout, field_name, value)
-
-    db.commit()
-    db.refresh(workout)
-
-    return workout
-
-
-@router.delete(
-    "/workouts/{workout_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    tags=["Workouts"],
-)
-def delete_workout(
-    workout_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> None:
-    """Delete a workout owned by the authenticated user."""
-
-    workout = get_owned_workout_or_404(db, workout_id, current_user)
-
-    db.delete(workout)
-    db.commit()
-
-
-# ---------------------------------------------------------------------------
-# Exercise endpoints
-# ---------------------------------------------------------------------------
-#
-# Exercises are either system exercises (user_id is null: the shared library,
-# read-only here) or custom exercises owned by the user who created them.
-
-
-@router.get(
-    "/exercises",
-    response_model=list[ExerciseResponse],
-    tags=["Exercises"],
-)
-def get_exercises(
-    current_user: CurrentUser,
-    db: DatabaseSession,
-    limit: Limit = 100,
-    offset: Offset = 0,
-) -> list[Exercise]:
-    """Return system exercises plus the authenticated user's custom exercises."""
-
-    statement = (
-        select(Exercise)
-        .where(
-            or_(
-                Exercise.user_id.is_(None),
-                Exercise.user_id == current_user.user_id,
-            )
-        )
-        .order_by(Exercise.name, Exercise.exercise_id)
-        .limit(limit)
-        .offset(offset)
-    )
-
-    return list(db.scalars(statement).all())
-
-
-@router.get(
-    "/exercises/{exercise_id}",
-    response_model=ExerciseResponse,
-    tags=["Exercises"],
-)
-def get_exercise(
-    exercise_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> Exercise:
-    """Return a system exercise or one of the user's custom exercises."""
-
-    return get_visible_exercise_or_404(db, exercise_id, current_user)
-
-
-@router.post(
-    "/exercises",
-    response_model=ExerciseResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=["Exercises"],
-)
-def create_exercise(
-    exercise_data: ExerciseCreate,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> Exercise:
-    """Create a custom exercise owned by the authenticated user."""
-
-    exercise = Exercise(
-        user_id=current_user.user_id,
-        name=exercise_data.name,
-        muscle_group=exercise_data.muscle_group,
-        equipment=exercise_data.equipment,
-        description=exercise_data.description,
-    )
-
-    db.add(exercise)
-
-    try:
-        db.commit()
-        db.refresh(exercise)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You already have an exercise with this name.",
-        ) from exc
-
-    return exercise
-
-
-@router.patch(
-    "/exercises/{exercise_id}",
-    response_model=ExerciseResponse,
-    tags=["Exercises"],
-)
-def update_exercise(
-    exercise_id: int,
-    exercise_data: ExerciseUpdate,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> Exercise:
-    """Partially update a custom exercise owned by the authenticated user.
-
-    Only the fields included in the request body are changed.
-    """
-
-    exercise = get_owned_exercise_or_404(db, exercise_id, current_user)
-
-    update_data = exercise_data.model_dump(exclude_unset=True)
-
-    for field_name, value in update_data.items():
-        setattr(exercise, field_name, value)
-
-    try:
-        db.commit()
-        db.refresh(exercise)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You already have an exercise with this name.",
-        ) from exc
-
-    return exercise
-
-
-@router.delete(
-    "/exercises/{exercise_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    tags=["Exercises"],
-)
-def delete_exercise(
-    exercise_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> None:
-    """Delete a custom exercise that is not used in any workout or plan."""
-
-    exercise = get_owned_exercise_or_404(db, exercise_id, current_user)
-
-    db.delete(exercise)
-
-    # The workout_exercises.exercise_id foreign key is ON DELETE RESTRICT,
-    # so the database rejects the delete atomically if the exercise is used.
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Exercise cannot be deleted because it is used in "
-                "one or more workouts or plans."
-            ),
-        ) from exc
-
-
-# ---------------------------------------------------------------------------
-# Workout exercise endpoints
-# ---------------------------------------------------------------------------
-
-
-@router.post(
-    "/workouts/{workout_id}/exercises",
-    response_model=WorkoutExerciseResponse,
-    status_code=status.HTTP_201_CREATED,
-    tags=["Workout Exercises"],
-)
-def add_exercise_to_workout(
-    workout_id: int,
-    exercise_data: WorkoutExerciseCreate,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> WorkoutExercise:
-    """Add an exercise performance record to a user's workout."""
-
-    get_owned_workout_or_404(db, workout_id, current_user)
-
-    get_visible_exercise_or_404(db, exercise_data.exercise_id, current_user)
-
-    workout_exercise = WorkoutExercise(
-        workout_id=workout_id,
-        exercise_id=exercise_data.exercise_id,
-        position=exercise_data.position,
-        sets=exercise_data.sets,
-        reps=exercise_data.reps,
-        weight=exercise_data.weight,
-        duration_seconds=exercise_data.duration_seconds,
-        distance_miles=exercise_data.distance_miles,
-    )
-
-    db.add(workout_exercise)
-    db.commit()
-    db.refresh(workout_exercise)
-
-    return workout_exercise
-
-
-@router.get(
-    "/workouts/{workout_id}/exercises",
-    response_model=list[WorkoutExerciseResponse],
-    tags=["Workout Exercises"],
-)
-def get_workout_exercises(
-    workout_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> list[WorkoutExercise]:
-    """Return exercises performed during a user's workout."""
-
-    get_owned_workout_or_404(db, workout_id, current_user)
-
-    statement = (
-        select(WorkoutExercise)
-        .options(selectinload(WorkoutExercise.exercise))
-        .where(WorkoutExercise.workout_id == workout_id)
-        .order_by(
-            WorkoutExercise.position,
-            WorkoutExercise.workout_exercise_id,
-        )
-    )
-
-    return list(db.scalars(statement).all())
-
-
-@router.patch(
-    "/workouts/{workout_id}/exercises/{workout_exercise_id}",
-    response_model=WorkoutExerciseResponse,
-    tags=["Workout Exercises"],
-)
-def update_workout_exercise(
-    workout_id: int,
-    workout_exercise_id: int,
-    exercise_data: WorkoutExerciseUpdate,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> WorkoutExercise:
-    """Update exercise performance within a user's workout.
-
-    Only the fields included in the request body are changed.
-    """
-
-    get_owned_workout_or_404(db, workout_id, current_user)
-
-    workout_exercise = get_workout_exercise_or_404(
-        db,
-        workout_id,
-        workout_exercise_id,
-    )
-
-    update_data = exercise_data.model_dump(exclude_unset=True)
-
-    for field_name, value in update_data.items():
-        setattr(workout_exercise, field_name, value)
-
-    db.commit()
-    db.refresh(workout_exercise)
-
-    return workout_exercise
-
-
-@router.delete(
-    "/workouts/{workout_id}/exercises/{workout_exercise_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    tags=["Workout Exercises"],
-)
-def delete_workout_exercise(
-    workout_id: int,
-    workout_exercise_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession,
-) -> None:
-    """Remove an exercise entry from a user's workout."""
-
-    get_owned_workout_or_404(db, workout_id, current_user)
-
-    workout_exercise = get_workout_exercise_or_404(
-        db,
-        workout_id,
-        workout_exercise_id,
-    )
-
-    db.delete(workout_exercise)
-    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -1251,4 +699,6 @@ def delete_session_exercise(
 # ---------------------------------------------------------------------------
 
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(exercises_router, prefix="/api/v1")
+app.include_router(workouts_router, prefix="/api/v1")
 app.include_router(router)
