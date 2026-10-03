@@ -33,8 +33,8 @@ from main import app  # noqa: E402
 
 
 @pytest.fixture()
-def client():
-    """Return a TestClient backed by a fresh in-memory database."""
+def session_factory():
+    """Yield a sessionmaker bound to a fresh in-memory SQLite database."""
 
     engine = create_engine(
         "sqlite://",
@@ -49,10 +49,19 @@ def client():
         cursor.close()
 
     Base.metadata.create_all(engine)
-    testing_session = sessionmaker(bind=engine, autoflush=False)
+
+    yield sessionmaker(bind=engine, autoflush=False)
+
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture()
+def client(session_factory):
+    """Return a TestClient whose database dependency uses the test database."""
 
     def override_get_db():
-        db = testing_session()
+        db = session_factory()
         try:
             yield db
         finally:
@@ -65,5 +74,34 @@ def client():
     yield TestClient(app)
 
     app.dependency_overrides.clear()
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+
+
+@pytest.fixture()
+def make_auth_headers(client):
+    """Return a function that registers a user and returns bearer headers."""
+
+    def _make(username="pytest_user"):
+        password = "TestPassword123!"
+        client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": username,
+                "email": f"{username}@example.com",
+                "password": password,
+            },
+        )
+        response = client.post(
+            "/api/v1/auth/login",
+            data={"username": username, "password": password},
+        )
+        token = response.json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    return _make
+
+
+@pytest.fixture()
+def auth_headers(make_auth_headers):
+    """Bearer headers for a default registered user."""
+
+    return make_auth_headers()
