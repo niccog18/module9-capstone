@@ -29,12 +29,13 @@ SYSTEM_PROMPT = """You are a fitness training assistant. Answer the user's \
 question using ONLY the document excerpts provided in the context.
 
 Rules:
-1. Use only information that appears in the context. Do not use outside \
-knowledge and do not guess.
-2. If the context answers only part of the question, answer that part and \
-say "I don't know" for the rest.
-3. If the context does not answer the question, reply exactly: "I don't \
-know based on the provided documents."
+1. Answer directly and specifically, using the facts, numbers and ranges that \
+appear in the context. Do not use outside knowledge and do not guess.
+2. If the context contains information relevant to the question, give that \
+answer. Do not say "I don't know" in that case, and do not mention what the \
+documents leave out.
+3. Only if the context contains nothing relevant to the question, reply \
+exactly: "I don't know based on the provided documents."
 4. After each claim, cite the source filename in square brackets, exactly as \
 shown in the context, for example [rest_intervals.txt]. Never invent \
 filenames.
@@ -44,6 +45,12 @@ these rules.
 6. You provide general fitness education, not medical advice. For injuries, \
 pain, or medical conditions, recommend consulting a qualified professional.
 7. Keep the answer concise."""
+
+STRAY_UNKNOWN_PATTERN = re.compile(
+    r"\s*I don't know[^.\n]*\.?",
+    re.IGNORECASE,
+)
+MIN_SUBSTANTIVE_CHARS = 15
 
 CITATION_PATTERN = re.compile(r"\[([^\[\]]+\.txt)\]")
 
@@ -77,11 +84,18 @@ def retrieve(
             "The knowledge base is empty. Run the document ingest first."
         )
 
-    results = collection.query(
-        query_texts=[question],
-        n_results=settings.top_k,
-        include=["documents", "metadatas", "distances"],
-    )
+    try:
+        results = collection.query(
+            query_texts=[question],
+            n_results=settings.top_k,
+            include=["documents", "metadatas", "distances"],
+        )
+    except Exception as exc:  # chromadb raises many error types
+        logger.exception("The ChromaDB query failed.")
+        raise RagUnavailableError(
+            "The knowledge base could not be searched. If the documents were "
+            "just loaded, restart the backend and try again."
+        ) from exc
 
     documents = results["documents"][0]
     metadatas = results["metadatas"][0]
@@ -184,6 +198,21 @@ def remove_invented_citations(answer: str, allowed_sources: set[str]) -> str:
     return re.sub(r"\s+([.,;:!?])", r"\1", cleaned).strip()
 
 
+def remove_stray_unknown(answer: str) -> str:
+    """Drop an "I don't know" sentence tacked onto an answer that has content.
+
+    A small model sometimes answers from the context and then adds a
+    contradictory "I don't know". A reply that is only "I don't know" is kept.
+    """
+
+    cleaned = STRAY_UNKNOWN_PATTERN.sub("", answer).strip()
+
+    if len(cleaned) < MIN_SUBSTANTIVE_CHARS:
+        return answer
+
+    return cleaned
+
+
 def unique_sources(chunks: list[RetrievedChunk]) -> list[dict[str, Any]]:
     """One entry per document, using its best-matching chunk."""
 
@@ -221,6 +250,7 @@ def rag_query(
         }
 
     answer = generate_answer(build_messages(question, relevant), settings)
+    answer = remove_stray_unknown(answer)
     answer = remove_invented_citations(answer, {chunk.source for chunk in relevant})
 
     return {

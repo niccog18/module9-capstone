@@ -65,7 +65,7 @@ flowchart TD
 
 | Service | Responsibility |
 | --- | --- |
-| **Streamlit** | User interface: auth, dashboard, workout history, exercise library, plans, AI assistant |
+| **Streamlit** | User interface: login/register, dashboard, exercise library, workouts, AI assistant |
 | **FastAPI** | API, authentication/authorization, validation, business logic, RAG orchestration, health checks |
 | **PostgreSQL** | Persistent structured data (users, workouts, exercises, plans) |
 | **ChromaDB** | Vector embeddings and fitness knowledge retrieval |
@@ -75,7 +75,7 @@ Services communicate over the Docker Compose network using service names (for ex
 
 ### Persistent Storage
 
-Docker volumes keep data across container restarts: `postgres_data`, `chroma_data`, and `ollama_data`.
+Docker volumes keep data across container restarts: `postgres_data`, `chroma_data`, `ollama_data` (downloaded LLM), and `model_cache` (the embedding model used by ChromaDB).
 
 ## Quick Start
 
@@ -87,22 +87,31 @@ Docker volumes keep data across container restarts: `postgres_data`, `chroma_dat
 ### Setup
 
 ```bash
-# 1. Clone the repository
+# 1. Clone the repository and open the project folder
 git clone <your-repo-url>
-cd ai-fitness-tracker
+cd <repo-folder>/ai-fitness-tracker
 
 # 2. Create your environment file and set a real JWT secret
 cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # paste the output as JWT_SECRET_KEY in .env
 
 # 3. Start all services
-docker compose up --build
+docker compose up --build -d
 
 # 4. Pull the LLM into the Ollama container (first run only)
-docker compose exec ollama ollama pull <MODEL_NAME>
+docker compose exec ollama ollama pull llama3.2:3b
 
-# 5. Load the fitness documents into ChromaDB (first run only)
-docker compose exec backend python -m app.rag.ingest
+# 5. Load the system exercise library (first run only; safe to re-run)
+docker compose exec backend python seed_exercises.py
+
+# 6. Load the fitness documents into ChromaDB (first run only; safe to re-run)
+docker compose exec backend python ingest_docs.py
+
+# 7. Restart the backend so it picks up the newly loaded documents
+docker compose restart backend
 ```
+
+The first ingest also downloads a small embedding model, so it needs internet access. When every service shows `healthy` in `docker compose ps`, open the Streamlit app.
 
 ### Access
 
@@ -112,7 +121,7 @@ docker compose exec backend python -m app.rag.ingest
 | FastAPI docs (Swagger) | http://localhost:8000/docs |
 | Health check | http://localhost:8000/health |
 
-> Adjust ports, the model name, and the ingest command to match your final implementation.
+The sidebar in the Streamlit app shows the live health of the database, ChromaDB, and Ollama. It reads *degraded* until the model is pulled and the documents are ingested.
 
 ## Configuration
 
@@ -120,24 +129,30 @@ All configuration is provided through environment variables. Secrets are never c
 
 | Variable | Purpose |
 | --- | --- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credentials for the PostgreSQL container (keep in sync with `DATABASE_URL`) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `JWT_SECRET_KEY` | Secret used to sign JWTs (at least 32 characters; the app refuses to start otherwise) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT lifetime in minutes (default `60`) |
 | `CORS_ORIGINS` | Comma-separated list of allowed frontend origins (default `http://localhost:8501`) |
 | `OLLAMA_URL` | Ollama service URL |
 | `MODEL_NAME` | Ollama model used for answers (configurable without code changes) |
-| `CHROMA_PATH` | ChromaDB location/connection |
-| `CONFIDENCE_THRESHOLD` | Minimum retrieval similarity required to answer |
-| `TOP_K` | Number of chunks retrieved per question |
+| `OLLAMA_TIMEOUT_SECONDS` | Seconds to wait for Ollama before `/ask` answers `503` (default `120`) |
+| `CHROMA_PATH` | ChromaDB storage directory (Docker Compose mounts a volume at `/data/chroma`) |
+| `COLLECTION_NAME` | ChromaDB collection name (default `fitness_docs`) |
+| `DOCS_DIRECTORY` | Folder of `.txt` source documents for ingestion (Docker Compose mounts `./docs` at `/docs`) |
+| `CONFIDENCE_THRESHOLD` | Minimum cosine similarity (0-1) for a chunk to count as relevant (default `0.30`) |
+| `TOP_K` | Number of chunks retrieved per question (default `4`) |
 
 ## Using the Application
 
 1. **Register and log in** from the authentication page.
-2. **Browse exercises** in the Exercise Library, or add a custom one.
-3. **Log a workout:** create a workout, then add exercises with required sets and reps. Optionally record weight, duration, and distance. Duration and distance can be recorded together for activities such as running and cycling.
-4. **Review history** on the Workout Dashboard and Workout History pages.
-5. **Create a plan** with a name and fitness goal, add sessions to it, and prescribe exercises within each session under Workout Plans.
-6. **Ask the AI assistant** a training question. The answer is shown with the documents used to produce it.
+2. **Check the dashboard** for your workout, plan, and exercise counts and your most recent workouts. The sidebar shows who is signed in, a log-out button, and the health of the backend services.
+3. **Browse exercises** in the Exercise Library. Search by name, filter by muscle group or equipment, add a custom exercise, or edit and delete your own.
+4. **Log a workout** under Workouts: create the workout (date, duration, notes), then add exercises with required sets and reps. Optionally record weight, duration, and distance. Duration and distance can be recorded together for activities such as running and cycling.
+5. **Review and edit history** in the Workouts history view: pick a workout, remove an exercise, edit the date, duration, or notes, or delete the workout.
+6. **Ask the AI assistant** a training question. The answer is shown with the documents used to produce it and a match-confidence percentage. Unrelated questions get a clear "not enough information" reply.
+
+> **Training plans (plans, sessions, and prescriptions)** are fully implemented in the API and covered by tests; use the Swagger docs at `/docs` to work with them. A Streamlit page for plans is not built yet.
 
 ## API Reference
 
@@ -290,7 +305,8 @@ Pydantic schemas are separate from SQLAlchemy models so database models are neve
 | `PlanExerciseUpdate` | Same fields, all optional; `position`, `sets`, `reps_min`, and `reps_max` cannot be null |
 | `PlanExerciseResponse` | All prescription fields plus `plan_exercise_id`, `session_id`, `created_at`, `updated_at`, and `exercise: ExerciseResponse` |
 | `AskRequest` | `question: str` |
-| `AskResponse` | `answer: str`, `sources: list[str]`, `confidence: float`, `chunks_retrieved: int` |
+| `AskResponse` | `answer: str`, `sources: list[SourceDocument]`, `confidence: float`, `chunks_retrieved: int` |
+| `SourceDocument` | `document: str` (file name), `content: str` (the matching text), `distance: float` (cosine distance; similarity is `1 - distance`) |
 
 Validation enforces non-empty questions, positive workout durations, valid dates, positive sets and reps, non-negative weights, distances, and positions, positive exercise durations when provided, valid email addresses, and ownership rules for user-owned resources.
 
@@ -315,6 +331,14 @@ flowchart LR
 ```
 
 Each chunk is stored with metadata identifying its source document.
+
+How it works in this project:
+
+- Source documents are plain `.txt` files in `docs/`. Each is split into paragraph chunks; `Reference:` paragraphs (citations of where the content came from) are skipped.
+- Chunks get stable IDs (`filename:index`), so re-running `python ingest_docs.py` updates the collection in place and removes chunks that no longer exist. `--reset` rebuilds it from scratch.
+- Embeddings use ChromaDB's default model (all-MiniLM-L6-v2) with **cosine** distance. Similarity is `1 - distance`, and `CONFIDENCE_THRESHOLD` is the minimum similarity a chunk needs to be used.
+- Answers come from Ollama at temperature 0 with strict grounding rules: use only the retrieved context, say "I don't know" when nothing relevant was retrieved, and cite source file names. Citations of files that were not retrieved are stripped from the answer.
+- If ChromaDB or Ollama is unavailable, or the knowledge base is empty, `/ask` returns `503` instead of guessing.
 
 ### Answering a Question (`POST /api/v1/ask`)
 
@@ -476,44 +500,46 @@ Tests cover the major application layers, not just that endpoints respond.
 docker compose exec backend pytest
 ```
 
-The initial suite covers:
+Run the suite with `docker compose exec backend python -m pytest -q`. It currently has **87 passing tests**. The tests are isolated: each uses its own in-memory SQLite database, and no real ChromaDB or Ollama is needed (the vector collection is faked and Ollama's HTTP call is mocked), so the suite is fast and repeatable.
 
-1. User registration
-2. Authentication and JWT generation
-3. Workout creation
-4. Workout retrieval
-5. Workout ownership/authorization
-6. Workout validation
-7. Workout deletion
-8. Exercise/workout relationship
-9. `/ask` request validation
-10. RAG response and source handling
-11. Health endpoint
-12. Plan, session, and prescription ownership (one user cannot read or change another user's)
-13. Prescription validation (positive sets, `reps_max >= reps_min`, RPE 1-10, non-negative rest)
-14. Prescriptions may reference system exercises and the user's own custom exercises, but not another user's
+| File | Covers |
+| --- | --- |
+| `tests/test_auth.py` | Registration, login and JWT generation, duplicate users, invalid credentials, protected routes |
+| `tests/test_crud.py` | Exercise create, read, update, and delete, including system exercises being read-only and per-user name conflicts |
+| `tests/test_workouts.py` | Workout create, retrieve, update, delete, validation, ownership, and workout-exercise entries |
+| `tests/test_plans.py` | Plans, sessions, and prescriptions: ownership, validation (positive sets, `reps_max >= reps_min`, RPE 1-10, non-negative rest), and which exercises may be prescribed |
+| `tests/test_rag.py` | `/ask` request validation, authentication, grounded answers with sources, "not enough information" handling, the similarity threshold, invented-citation removal, and `503` when Ollama or the knowledge base is unavailable |
+| `tests/test_seed.py` | The system exercise seed script, including that it is safe to run twice |
 
 The project requires at least five passing tests; the goal is a broader suite around critical functionality.
 
 ## Project Structure
 
-> Proposed layout; update to match the final repository.
-
 ```text
 ai-fitness-tracker/
 ├── backend/
-│   ├── app/
-│   │   ├── api/          # Route handlers
-│   │   ├── models/       # SQLAlchemy models
-│   │   ├── schemas/      # Pydantic schemas
-│   │   ├── rag/          # Ingestion, retrieval, prompting
-│   │   └── core/         # Config, security, dependencies
-│   ├── tests/
+│   ├── main.py                # App setup, router registration, /health
+│   ├── auth.py                # Password hashing, JWT creation and verification
+│   ├── database.py            # Engine and session
+│   ├── models.py              # SQLAlchemy models
+│   ├── schemas.py             # Pydantic schemas
+│   ├── dependencies.py        # Shared dependencies and ownership lookups
+│   ├── routers/               # auth, exercises, workouts, plans, ask
+│   ├── rag_config.py          # RAG settings from environment variables
+│   ├── rag_store.py           # ChromaDB collection access
+│   ├── rag_pipeline.py        # Retrieval, prompting, answer generation
+│   ├── rag_health.py          # ChromaDB and Ollama health checks
+│   ├── ingest_docs.py         # Loads docs/ into ChromaDB
+│   ├── seed_exercises.py      # Loads the system exercise library
+│   ├── tests/                 # pytest suite
 │   └── Dockerfile
 ├── frontend/
-│   ├── app.py            # Streamlit app
+│   ├── app.py                 # Streamlit entry point and navigation
+│   ├── api_client.py          # All calls to the backend API
+│   ├── ui.py                  # Session state, error handling, sidebar
+│   ├── views/                 # auth, dashboard, exercises, workouts, assistant
 │   └── Dockerfile
-├── data/                 # Source fitness documents
+├── docs/                      # Source fitness documents for the RAG pipeline
 ├── docker-compose.yml
 ├── .env.example
 └── README.md

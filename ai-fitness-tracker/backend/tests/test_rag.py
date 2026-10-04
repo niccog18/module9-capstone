@@ -222,3 +222,49 @@ def test_ask_returns_503_when_knowledge_base_is_empty(client, auth_headers, monk
 
     assert response.status_code == 503
     assert calls == []
+
+
+def test_ask_drops_a_contradictory_dont_know(client, auth_headers, monkeypatch):
+    """An 'I don't know' tacked onto a real answer is removed from the reply."""
+
+    use_collection(FakeCollection())
+    mock_ollama(
+        monkeypatch,
+        answer=(
+            "Rest 2 to 3 minutes between heavy sets [rest_intervals.txt]. "
+            "I don't know based on the provided documents."
+        ),
+    )
+
+    response = client.post(URL, json=QUESTION, headers=auth_headers)
+
+    answer = response.json()["answer"]
+    assert "2 to 3 minutes" in answer
+    assert "don't know" not in answer
+
+
+def test_ask_keeps_a_plain_dont_know(client, auth_headers, monkeypatch):
+    """A reply that is only 'I don't know' is passed through unchanged."""
+
+    use_collection(FakeCollection())
+    mock_ollama(monkeypatch, answer="I don't know based on the provided documents.")
+
+    response = client.post(URL, json=QUESTION, headers=auth_headers)
+
+    assert response.json()["answer"] == "I don't know based on the provided documents."
+
+
+def test_ask_returns_503_when_the_vector_search_fails(client, auth_headers, monkeypatch):
+    """A ChromaDB error during the search is a 503, not an unhandled 500."""
+
+    class BrokenCollection(FakeCollection):
+        def query(self, query_texts, n_results, include):
+            raise RuntimeError("Error creating hnsw segment reader")
+
+    use_collection(BrokenCollection())
+    calls = mock_ollama(monkeypatch)
+
+    response = client.post(URL, json=QUESTION, headers=auth_headers)
+
+    assert response.status_code == 503
+    assert calls == []

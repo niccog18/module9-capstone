@@ -150,6 +150,10 @@ def main(argv: list[str] | None = None) -> int:
         f"'{collection.name}' ({removed} stale removed, "
         f"{collection.count()} total)."
     )
+    print(
+        "If the backend is already running, restart it so it picks up the new "
+        "data: docker compose restart backend"
+    )
     return 0
 
 
