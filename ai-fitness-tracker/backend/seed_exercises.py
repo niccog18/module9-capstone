@@ -104,17 +104,11 @@ def seed_system_exercises(db: Session) -> tuple[int, int]:
 def main() -> int:
     # Imported here so importing this module (for example in tests) does not
     # require DATABASE_URL.
-    from sqlalchemy import inspect
+    from database import Base, SessionLocal, engine
 
-    from database import SessionLocal, engine
-
-    if not inspect(engine).has_table(Exercise.__tablename__):
-        print(
-            "Error: the exercises table does not exist. Start the backend once "
-            "so the tables are created, then run this again.",
-            file=sys.stderr,
-        )
-        return 1
+    # Idempotent: makes the seed safe to run before the API has ever started
+    # (for example from the container's startup command on a fresh database).
+    Base.metadata.create_all(bind=engine)
 
     with SessionLocal() as db:
         added, present = seed_system_exercises(db)

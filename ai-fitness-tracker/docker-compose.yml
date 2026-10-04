@@ -2,9 +2,12 @@
 #   docker compose up --build
 # Compose reads .env automatically for the ${...} values below.
 #
-# First run only, once the stack is up:
-#   docker compose exec ollama ollama pull <MODEL_NAME>      (model from .env)
-#   docker compose exec backend python ingest_docs.py        (load ./docs)
+# One command starts everything. On first run it also:
+#   - pulls the language model (the ollama-pull service; a few minutes)
+#   - creates the database tables and loads the system exercises
+#   - loads ./docs into ChromaDB
+# until the model download finishes, /health reports "degraded" and /ask
+# answers 503; the rest of the app works.
 
 services:
   postgres:
@@ -38,6 +41,18 @@ services:
       retries: 10
       start_period: 10s
 
+  ollama-pull:
+    # One-shot job: downloads MODEL_NAME into the ollama_data volume, then
+    # exits. It does nothing when the model is already there.
+    image: ollama/ollama:latest
+    restart: "no"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${MODEL_NAME:-llama3.2:3b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+
   backend:
     build:
       context: ./backend
@@ -60,7 +75,14 @@ services:
       - chroma_data:/data/chroma
       # Keeps the downloaded embedding model across container rebuilds.
       - model_cache:/home/appuser/.cache
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # Seed and ingest run to completion BEFORE the API starts (both are safe
+    # to repeat). Running them first also avoids ChromaDB serving stale data
+    # to an API process that was already running. A failure is logged but does
+    # not stop the API from starting.
+    command: >
+      sh -c "python seed_exercises.py;
+             python ingest_docs.py;
+             exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,7 +100,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      # Seeding and ingesting run first; the first run also downloads the
+      # embedding model, so allow plenty of time before checks count.
+      start_period: 180s
 
   frontend:
     build:

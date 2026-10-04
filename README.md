@@ -86,32 +86,34 @@ Docker volumes keep data across container restarts: `postgres_data`, `chroma_dat
 
 ### Setup
 
-```bash
-# 1. Clone the repository and open the project folder
-git clone <your-repo-url>
-cd <repo-folder>/ai-fitness-tracker
+1. **Clone the repository and open the project folder**
 
-# 2. Create your environment file and set a real JWT secret
-cp .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(48))"   # paste the output as JWT_SECRET_KEY in .env
+   ```bash
+   git clone <your-repo-url>
+   cd <repo-folder>/ai-fitness-tracker
+   ```
 
-# 3. Start all services
-docker compose up --build -d
+2. **Create your environment file**
 
-# 4. Pull the LLM into the Ollama container (first run only)
-docker compose exec ollama ollama pull llama3.2:3b
+   ```bash
+   cp .env.example .env
+   ```
 
-# 5. Load the system exercise library (first run only; safe to re-run)
-docker compose exec backend python seed_exercises.py
+   Open `.env` and set `JWT_SECRET_KEY` to a random string of at least 32 characters. To generate one:
 
-# 6. Load the fitness documents into ChromaDB (first run only; safe to re-run)
-docker compose exec backend python ingest_docs.py
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(48))"
+   ```
 
-# 7. Restart the backend so it picks up the newly loaded documents
-docker compose restart backend
-```
+3. **Start everything**
 
-The first ingest also downloads a small embedding model, so it needs internet access. When every service shows `healthy` in `docker compose ps`, open the Streamlit app.
+   ```bash
+   docker compose up --build -d
+   ```
+
+4. **Open the app** at http://localhost:8501 and register an account.
+
+> **First run:** Docker downloads the `llama3.2:3b` model (about 2 GB), seeds the 47 system exercises, and indexes the documents automatically. The sidebar shows "degraded" until the download finishes. The AI assistant works once it reads "healthy". Later starts take seconds.
 
 ### Access
 
@@ -121,7 +123,7 @@ The first ingest also downloads a small embedding model, so it needs internet ac
 | FastAPI docs (Swagger) | http://localhost:8000/docs |
 | Health check | http://localhost:8000/health |
 
-The sidebar in the Streamlit app shows the live health of the database, ChromaDB, and Ollama. It reads *degraded* until the model is pulled and the documents are ingested.
+The sidebar in the Streamlit app shows the live health of the database, ChromaDB, and Ollama. It reads *degraded* until the model download finishes on the first run.
 
 ## Configuration
 
@@ -500,7 +502,7 @@ Tests cover the major application layers, not just that endpoints respond.
 docker compose exec backend pytest
 ```
 
-Run the suite with `docker compose exec backend python -m pytest -q`. It currently has **87 passing tests**. The tests are isolated: each uses its own in-memory SQLite database, and no real ChromaDB or Ollama is needed (the vector collection is faked and Ollama's HTTP call is mocked), so the suite is fast and repeatable.
+Run the suite with `docker compose exec backend python -m pytest -q`. It currently has **91 passing tests**. The tests are isolated: each uses its own in-memory SQLite database, and no real ChromaDB or Ollama is needed (the vector collection is faked and Ollama's HTTP call is mocked), so the suite is fast and repeatable.
 
 | File | Covers |
 | --- | --- |
@@ -509,6 +511,7 @@ Run the suite with `docker compose exec backend python -m pytest -q`. It current
 | `tests/test_workouts.py` | Workout create, retrieve, update, delete, validation, ownership, and workout-exercise entries |
 | `tests/test_plans.py` | Plans, sessions, and prescriptions: ownership, validation (positive sets, `reps_max >= reps_min`, RPE 1-10, non-negative rest), and which exercises may be prescribed |
 | `tests/test_rag.py` | `/ask` request validation, authentication, grounded answers with sources, "not enough information" handling, the similarity threshold, invented-citation removal, and `503` when Ollama or the knowledge base is unavailable |
+| `tests/test_health.py` | `/health` reports healthy, degraded (Ollama down, still `200`), and unhealthy (database down, `503`) |
 | `tests/test_seed.py` | The system exercise seed script, including that it is safe to run twice |
 
 The project requires at least five passing tests; the goal is a broader suite around critical functionality.
