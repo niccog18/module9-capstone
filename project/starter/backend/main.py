@@ -12,6 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from database import Base, engine
 from dependencies import DatabaseSession
+from rag_health import HEALTHY, UNHEALTHY, check_chroma, check_ollama
+from routers.ask import router as ask_router
 from routers.auth import router as auth_router
 from routers.exercises import router as exercises_router
 from routers.plans import router as plans_router
@@ -107,27 +109,38 @@ def health_check(
     response: Response,
     db: DatabaseSession,
 ) -> HealthResponse:
-    """Check whether the API and database are available.
+    """Report the status of the database, ChromaDB and Ollama.
 
-    Returns 503 when the database is unreachable so load balancers and
-    orchestrators can detect an unhealthy instance.
+    - healthy: every dependency is reachable (200).
+    - degraded: the database works but ChromaDB or Ollama does not, so
+      workouts and plans work while /ask does not (200).
+    - unhealthy: the database is unreachable (503), so load balancers and
+      orchestrators can detect a broken instance.
     """
 
     try:
         db.execute(select(1))
-        database_status = "healthy"
+        database_status = HEALTHY
     except SQLAlchemyError:
         logger.exception("Database health check failed.")
-        database_status = "unhealthy"
+        database_status = UNHEALTHY
 
-    if database_status != "healthy":
+    chroma_status = check_chroma()
+    ollama_status = check_ollama()
+
+    if database_status != HEALTHY:
+        overall_status = UNHEALTHY
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    elif HEALTHY == chroma_status == ollama_status:
+        overall_status = HEALTHY
+    else:
+        overall_status = "degraded"
 
     return HealthResponse(
-        status=database_status,
+        status=overall_status,
         database=database_status,
-        ollama="not_checked",
-        chromadb="not_checked",
+        ollama=ollama_status,
+        chromadb=chroma_status,
     )
 
 
@@ -139,3 +152,4 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(exercises_router, prefix="/api/v1")
 app.include_router(workouts_router, prefix="/api/v1")
 app.include_router(plans_router, prefix="/api/v1")
+app.include_router(ask_router, prefix="/api/v1")
