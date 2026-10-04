@@ -5,13 +5,10 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response, status
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
-
 from database import Base, engine
 from dependencies import DatabaseSession
+from fastapi import FastAPI, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from rag_health import HEALTHY, UNHEALTHY, check_chroma, check_ollama
 from routers.ask import router as ask_router
 from routers.auth import router as auth_router
@@ -19,6 +16,8 @@ from routers.exercises import router as exercises_router
 from routers.plans import router as plans_router
 from routers.workouts import router as workouts_router
 from schemas import HealthResponse
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 

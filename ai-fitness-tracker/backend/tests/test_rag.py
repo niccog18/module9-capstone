@@ -6,7 +6,6 @@ through FastAPI's dependency overrides, and Ollama's HTTP call is mocked.
 
 import httpx
 import pytest
-
 import rag_pipeline
 from main import app
 from rag_config import RagSettings
@@ -212,7 +211,9 @@ def test_ask_returns_503_when_ollama_times_out(client, auth_headers, monkeypatch
     assert response.status_code == 503
 
 
-def test_ask_returns_503_when_knowledge_base_is_empty(client, auth_headers, monkeypatch):
+def test_ask_returns_503_when_knowledge_base_is_empty(
+    client, auth_headers, monkeypatch
+):
     """Asking before the documents are ingested is a 503, not a made-up answer."""
 
     use_collection(FakeCollection(count=0))
@@ -254,7 +255,9 @@ def test_ask_keeps_a_plain_dont_know(client, auth_headers, monkeypatch):
     assert response.json()["answer"] == "I don't know based on the provided documents."
 
 
-def test_ask_returns_503_when_the_vector_search_fails(client, auth_headers, monkeypatch):
+def test_ask_returns_503_when_the_vector_search_fails(
+    client, auth_headers, monkeypatch
+):
     """A ChromaDB error during the search is a 503, not an unhandled 500."""
 
     class BrokenCollection(FakeCollection):

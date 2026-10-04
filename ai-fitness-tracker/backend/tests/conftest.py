@@ -21,15 +21,14 @@ os.environ.setdefault(
     "postgresql+psycopg://test:test@localhost:5432/test",
 )
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy import create_engine, event  # noqa: E402
-from sqlalchemy.orm import sessionmaker  # noqa: E402
-from sqlalchemy.pool import StaticPool  # noqa: E402
-
-import models  # noqa: E402,F401  (registers every table on Base.metadata)
-from database import Base, get_db  # noqa: E402
-from main import app  # noqa: E402
+import models  # noqa: F401  (registers every table on Base.metadata)
+import pytest
+from database import Base, get_db
+from fastapi.testclient import TestClient
+from main import app
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture()

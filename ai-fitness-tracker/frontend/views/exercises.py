@@ -1,8 +1,7 @@
 """Exercise library: browse system exercises and manage your own."""
 
-import streamlit as st
-
 import api_client
+import streamlit as st
 import ui
 
 ALL = "All"
@@ -10,7 +9,9 @@ SECTION_KEY = "exercise_section"
 SECTIONS = ["Browse", "Add custom", "Manage mine"]
 
 
-def _matches(exercise: dict, search: str, muscle: str, equipment: str, mine: bool) -> bool:
+def _matches(
+    exercise: dict, search: str, muscle: str, equipment: str, mine: bool
+) -> bool:
     if mine and exercise["user_id"] is None:
         return False
     if muscle != ALL and exercise["muscle_group"] != muscle:
@@ -33,7 +34,9 @@ def _browse_tab(exercises: list[dict]) -> None:
     equipment = equipment_col.selectbox("Equipment", equipment_types)
     mine = st.checkbox("Only my custom exercises")
 
-    shown = [e for e in exercises if _matches(e, search.strip(), muscle, equipment, mine)]
+    shown = [
+        e for e in exercises if _matches(e, search.strip(), muscle, equipment, mine)
+    ]
     st.caption(f"Showing {len(shown)} of {len(exercises)} exercises")
 
     if not shown:
@@ -58,8 +61,12 @@ def _browse_tab(exercises: list[dict]) -> None:
 def _add_tab(token: str) -> None:
     with st.form("add_exercise_form", clear_on_submit=True):
         name = st.text_input("Name", max_chars=100)
-        muscle_group = st.text_input("Muscle group", max_chars=100, placeholder="e.g. Chest")
-        equipment = st.text_input("Equipment", max_chars=100, placeholder="e.g. Barbell")
+        muscle_group = st.text_input(
+            "Muscle group", max_chars=100, placeholder="e.g. Chest"
+        )
+        equipment = st.text_input(
+            "Equipment", max_chars=100, placeholder="e.g. Barbell"
+        )
         description = st.text_area("Description (optional)", max_chars=2000)
         submitted = st.form_submit_button("Add exercise", type="primary")
 
@@ -88,7 +95,9 @@ def _add_tab(token: str) -> None:
 def _manage_tab(token: str, exercises: list[dict]) -> None:
     own = [e for e in exercises if e["user_id"] is not None]
     if not own:
-        st.info("You have no custom exercises yet. Add one in the 'Add custom' section.")
+        st.info(
+            "You have no custom exercises yet. Add one in the 'Add custom' section."
+        )
         return
 
     chosen = st.selectbox(
@@ -154,12 +163,15 @@ def render() -> None:
     # A selector (not st.tabs) so the chosen section survives reruns:
     # after a form is submitted the user stays where they were.
     st.session_state.setdefault(SECTION_KEY, SECTIONS[0])
-    section = st.segmented_control(
-        "Section",
-        SECTIONS,
-        key=SECTION_KEY,
-        label_visibility="collapsed",
-    ) or SECTIONS[0]
+    section = (
+        st.segmented_control(
+            "Section",
+            SECTIONS,
+            key=SECTION_KEY,
+            label_visibility="collapsed",
+        )
+        or SECTIONS[0]
+    )
 
     if section == "Browse":
         _browse_tab(exercises)

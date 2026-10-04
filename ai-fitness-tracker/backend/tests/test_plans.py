@@ -1,7 +1,6 @@
 """Capstone backend tests for plans, sessions and training prescriptions."""
 
 import pytest
-
 from models import Exercise
 
 PLANS = "/api/v1/plans"
@@ -135,7 +134,9 @@ def test_session_crud(client, auth_headers):
     url = f"{PLANS}/{plan_id}/sessions/{session_id}"
 
     assert created.status_code == 201
-    assert len(client.get(f"{PLANS}/{plan_id}/sessions", headers=auth_headers).json()) == 1
+    assert (
+        len(client.get(f"{PLANS}/{plan_id}/sessions", headers=auth_headers).json()) == 1
+    )
     assert client.get(url, headers=auth_headers).json()["exercises"] == []
 
     patched = client.patch(url, json={"session_name": "Pull Day"}, headers=auth_headers)
@@ -250,9 +251,13 @@ def test_update_prescription_checks_the_resulting_rep_range(
 
 
 def test_delete_prescription(client, auth_headers, built_plan):
-    base = f"{PLANS}/{built_plan['plan_id']}/sessions/{built_plan['session_id']}/exercises"
+    base = (
+        f"{PLANS}/{built_plan['plan_id']}/sessions/{built_plan['session_id']}/exercises"
+    )
 
-    deleted = client.delete(f"{base}/{built_plan['plan_exercise_id']}", headers=auth_headers)
+    deleted = client.delete(
+        f"{base}/{built_plan['plan_exercise_id']}", headers=auth_headers
+    )
 
     assert deleted.status_code == 204
     assert client.get(base, headers=auth_headers).json() == []
@@ -320,8 +325,13 @@ def test_other_users_plan_is_hidden_at_every_level(client, make_auth_headers):
     assert client.get(session_url, headers=bob).status_code == 404
     assert client.get(f"{session_url}/exercises", headers=bob).status_code == 404
     assert prescribe(client, bob, plan_id, session_id, bob_exercise).status_code == 404
-    assert client.patch(prescription_url, json={"sets": 9}, headers=bob).status_code == 404
+    assert (
+        client.patch(prescription_url, json={"sets": 9}, headers=bob).status_code == 404
+    )
     assert client.delete(prescription_url, headers=bob).status_code == 404
 
     # Alice's data is untouched.
-    assert client.get(prescription_url.rsplit("/", 1)[0], headers=alice).json()[0]["sets"] == 3
+    assert (
+        client.get(prescription_url.rsplit("/", 1)[0], headers=alice).json()[0]["sets"]
+        == 3
+    )

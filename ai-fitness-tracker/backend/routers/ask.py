@@ -3,9 +3,8 @@
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-
 from auth import CurrentUser
+from fastapi import APIRouter, Depends, HTTPException, status
 from rag_pipeline import RagUnavailableError, rag_query
 from rag_store import get_collection
 from schemas import AskRequest, AskResponse

@@ -1,9 +1,8 @@
 """Tests for the system exercise seed script."""
 
-from sqlalchemy import func, select
-
 from models import Exercise
 from seed_exercises import SYSTEM_EXERCISES, seed_system_exercises
+from sqlalchemy import func, select
 
 
 def count_system_exercises(db):
@@ -34,7 +33,9 @@ def test_seed_adds_system_exercises_once(session_factory):
     assert total == len(SYSTEM_EXERCISES)
 
 
-def test_seeded_exercises_are_visible_but_read_only(client, auth_headers, session_factory):
+def test_seeded_exercises_are_visible_but_read_only(
+    client, auth_headers, session_factory
+):
     with session_factory() as db:
         seed_system_exercises(db)
 

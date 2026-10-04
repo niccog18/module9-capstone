@@ -5,14 +5,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import jwt
+from database import get_db
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from models import User
 from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from database import get_db
-from models import User
 
 # ---------------------------------------------------------------------------
 # Authentication configuration

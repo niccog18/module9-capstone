@@ -1,8 +1,7 @@
 """AI assistant: ask training questions answered from the knowledge base."""
 
-import streamlit as st
-
 import api_client
+import streamlit as st
 import ui
 
 HISTORY_KEY = "assistant_history"
@@ -32,7 +31,9 @@ def _render_sources(message: dict) -> None:
     if confidence_text:
         st.caption(confidence_text)
 
-    with st.expander(f"Sources ({len(sources)} document{'s' if len(sources) != 1 else ''})"):
+    with st.expander(
+        f"Sources ({len(sources)} document{'s' if len(sources) != 1 else ''})"
+    ):
         for source in sources:
             distance = source.get("distance")
             similarity = f" - {1 - distance:.0%} match" if distance is not None else ""

@@ -1,11 +1,5 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
 from auth import (
     CurrentUser,
     authenticate_user,
@@ -13,9 +7,13 @@ from auth import (
     hash_password,
 )
 from database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from models import User
 from schemas import TokenResponse, UserCreate, UserResponse
-
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 router = APIRouter(
     prefix="/auth",

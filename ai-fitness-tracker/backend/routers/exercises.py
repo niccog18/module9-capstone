@@ -4,10 +4,6 @@ System exercises (user_id is null) are visible to everyone and read-only
 through the API. Custom exercises are owned by the user who created them.
 """
 
-from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import or_, select
-from sqlalchemy.exc import IntegrityError
-
 from auth import CurrentUser
 from dependencies import (
     DatabaseSession,
@@ -16,8 +12,11 @@ from dependencies import (
     get_owned_exercise_or_404,
     get_visible_exercise_or_404,
 )
+from fastapi import APIRouter, HTTPException, status
 from models import Exercise
 from schemas import ExerciseCreate, ExerciseResponse, ExerciseUpdate
+from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(
     prefix="/exercises",

@@ -60,9 +60,7 @@ def get_rag_settings() -> RagSettings:
         ollama_url=os.getenv("OLLAMA_URL", "http://ollama:11434").strip().rstrip("/"),
         model_name=model_name,
         ollama_timeout_seconds=float(
-            _read_number(
-                "OLLAMA_TIMEOUT_SECONDS", "120", float, minimum=1, maximum=600
-            )
+            _read_number("OLLAMA_TIMEOUT_SECONDS", "120", float, minimum=1, maximum=600)
         ),
         chroma_path=os.getenv("CHROMA_PATH", "/app/chroma_data").strip(),
         collection_name=os.getenv("COLLECTION_NAME", "fitness_docs").strip(),

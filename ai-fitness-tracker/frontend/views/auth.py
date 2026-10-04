@@ -1,8 +1,7 @@
 """Login and account-creation page."""
 
-import streamlit as st
-
 import api_client
+import streamlit as st
 import ui
 from api_client import ApiError
 

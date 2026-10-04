@@ -14,15 +14,13 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-
 from rag_config import RagSettings, get_rag_settings
 from rag_store import get_collection
 
 logger = logging.getLogger(__name__)
 
 NO_INFORMATION_ANSWER = (
-    "I don't have enough information in the provided documents to answer "
-    "that question."
+    "I don't have enough information in the provided documents to answer that question."
 )
 
 SYSTEM_PROMPT = """You are a fitness training assistant. Answer the user's \
@@ -118,9 +116,7 @@ def filter_relevant(
     """Keep chunks whose similarity meets the configured threshold."""
 
     return [
-        chunk
-        for chunk in chunks
-        if chunk.similarity >= settings.confidence_threshold
+        chunk for chunk in chunks if chunk.similarity >= settings.confidence_threshold
     ]
 
 
@@ -130,9 +126,7 @@ def build_messages(
 ) -> list[dict[str, str]]:
     """Build the chat messages: grounding rules plus context and question."""
 
-    context = "\n\n".join(
-        f"[{chunk.source}]\n{chunk.text}" for chunk in chunks
-    )
+    context = "\n\n".join(f"[{chunk.source}]\n{chunk.text}" for chunk in chunks)
 
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -166,16 +160,24 @@ def generate_answer(
         answer = response.json()["message"]["content"].strip()
     except httpx.TimeoutException as exc:
         logger.warning("Ollama request timed out.")
-        raise RagUnavailableError("The language model took too long to respond.") from exc
+        raise RagUnavailableError(
+            "The language model took too long to respond."
+        ) from exc
     except httpx.HTTPStatusError as exc:
-        logger.warning("Ollama returned HTTP %s: %s", exc.response.status_code, exc.response.text[:200])
+        logger.warning(
+            "Ollama returned HTTP %s: %s",
+            exc.response.status_code,
+            exc.response.text[:200],
+        )
         raise RagUnavailableError("The language model is not available.") from exc
     except httpx.HTTPError as exc:
         logger.warning("Could not reach Ollama: %s", exc)
         raise RagUnavailableError("The language model could not be reached.") from exc
     except (KeyError, TypeError, ValueError) as exc:
         logger.warning("Unexpected Ollama response: %s", exc)
-        raise RagUnavailableError("The language model returned an unexpected response.") from exc
+        raise RagUnavailableError(
+            "The language model returned an unexpected response."
+        ) from exc
 
     if not answer:
         raise RagUnavailableError("The language model returned an empty answer.")

@@ -7,7 +7,6 @@ dependency can never turn the health endpoint itself into a 500.
 import logging
 
 import httpx
-
 from rag_config import get_rag_settings
 from rag_store import get_collection
 

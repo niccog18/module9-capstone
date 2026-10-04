@@ -4,11 +4,6 @@ A plan contains sessions; each session contains prescribed exercises (the
 training prescription, as opposed to the completed WorkoutExercise log).
 """
 
-from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
-
 from auth import CurrentUser
 from dependencies import (
     DatabaseSession,
@@ -16,6 +11,7 @@ from dependencies import (
     Offset,
     get_visible_exercise_or_404,
 )
+from fastapi import APIRouter, HTTPException, status
 from models import PlanExercise, PlanSession, User, WorkoutPlan
 from schemas import (
     PlanExerciseCreate,
@@ -30,6 +26,9 @@ from schemas import (
     WorkoutPlanResponse,
     WorkoutPlanUpdate,
 )
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
 # Each route carries its own tag (Workout Plans / Plan Sessions / Training
 # Prescriptions), so the router itself has none.
@@ -359,9 +358,7 @@ def get_plan_session(
     statement = (
         select(PlanSession)
         .options(
-            selectinload(PlanSession.exercises).selectinload(
-                PlanExercise.exercise
-            )
+            selectinload(PlanSession.exercises).selectinload(PlanExercise.exercise)
         )
         .where(PlanSession.session_id == plan_session.session_id)
     )

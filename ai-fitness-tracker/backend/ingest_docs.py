@@ -90,8 +90,7 @@ def ingest(collection: Any, chunks: list[Chunk]) -> int:
         ids=[chunk.chunk_id for chunk in chunks],
         documents=[chunk.text for chunk in chunks],
         metadatas=[
-            {"source": chunk.source, "chunk_index": chunk.index}
-            for chunk in chunks
+            {"source": chunk.source, "chunk_index": chunk.index} for chunk in chunks
         ],
     )
 

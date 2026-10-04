@@ -1,8 +1,7 @@
 """Dashboard: a summary of the user's training data."""
 
-import streamlit as st
-
 import api_client
+import streamlit as st
 import ui
 
 RECENT_WORKOUT_COUNT = 5

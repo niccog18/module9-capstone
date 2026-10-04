@@ -83,7 +83,9 @@ def _request(
             timeout=timeout,
         )
     except requests.Timeout as exc:
-        raise ApiError("The server took too long to respond. Please try again.") from exc
+        raise ApiError(
+            "The server took too long to respond. Please try again."
+        ) from exc
     except requests.ConnectionError as exc:
         raise ApiError(
             "Cannot reach the server. Check that the backend is running."
@@ -115,7 +117,9 @@ def health_check() -> dict[str, Any]:
     """
 
     try:
-        response = requests.get(f"{BACKEND_URL}/health", timeout=DEFAULT_TIMEOUT_SECONDS)
+        response = requests.get(
+            f"{BACKEND_URL}/health", timeout=DEFAULT_TIMEOUT_SECONDS
+        )
         return response.json()
     except (requests.RequestException, ValueError):
         return {
@@ -222,9 +226,7 @@ def update_workout_exercise(
 def delete_workout_exercise(
     token: str, workout_id: int, workout_exercise_id: int
 ) -> None:
-    _request(
-        "DELETE", f"/workouts/{workout_id}/exercises/{workout_exercise_id}", token
-    )
+    _request("DELETE", f"/workouts/{workout_id}/exercises/{workout_exercise_id}", token)
 
 
 # --- Plans, sessions and prescriptions ----------------------------------------
@@ -250,9 +252,7 @@ def delete_plan(token: str, plan_id: int) -> None:
     _request("DELETE", f"/plans/{plan_id}", token)
 
 
-def create_session(
-    token: str, plan_id: int, payload: dict[str, Any]
-) -> dict[str, Any]:
+def create_session(token: str, plan_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     return _request("POST", f"/plans/{plan_id}/sessions", token, json=payload)
 
 

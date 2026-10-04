@@ -6,12 +6,11 @@ circular imports and keeps each ownership rule defined in exactly one place.
 
 from typing import Annotated
 
+from database import get_db
 from fastapi import Depends, HTTPException, Query, status
+from models import Exercise, User
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
-
-from database import get_db
-from models import Exercise, User
 
 DatabaseSession = Annotated[Session, Depends(get_db)]
 

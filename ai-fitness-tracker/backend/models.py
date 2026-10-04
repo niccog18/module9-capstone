@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
+from database import Base
 from sqlalchemy import (
     CheckConstraint,
     Date,
@@ -18,8 +19,6 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from database import Base
 
 
 class TimestampMixin:

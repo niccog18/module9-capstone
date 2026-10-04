@@ -1,10 +1,10 @@
 """Shared Streamlit helpers: session state, API error handling, sidebar."""
 
-from typing import Any, Callable
-
-import streamlit as st
+from collections.abc import Callable
+from typing import Any
 
 import api_client
+import streamlit as st
 from api_client import ApiError
 
 HEALTH_LABELS = {

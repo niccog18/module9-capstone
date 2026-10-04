@@ -8,7 +8,6 @@ through api_client.py; pages live in the views/ package.
 """
 
 import streamlit as st
-
 import ui
 from views import assistant, auth, dashboard, exercises, workouts
 

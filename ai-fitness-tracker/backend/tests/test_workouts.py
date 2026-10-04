@@ -1,7 +1,6 @@
 """Capstone backend tests for workouts and the exercises performed in them."""
 
 import pytest
-
 from models import Exercise
 
 WORKOUTS = "/api/v1/workouts"
@@ -117,10 +116,18 @@ def test_delete_workout_removes_it_and_its_entries(client, auth_headers):
     exercise_id = create_exercise(client, auth_headers)
     add_exercise(client, auth_headers, workout_id, exercise_id)
 
-    assert client.delete(f"{WORKOUTS}/{workout_id}", headers=auth_headers).status_code == 204
-    assert client.get(f"{WORKOUTS}/{workout_id}", headers=auth_headers).status_code == 404
+    assert (
+        client.delete(f"{WORKOUTS}/{workout_id}", headers=auth_headers).status_code
+        == 204
+    )
+    assert (
+        client.get(f"{WORKOUTS}/{workout_id}", headers=auth_headers).status_code == 404
+    )
     # The exercise itself is not deleted with the workout.
-    assert client.get(f"{EXERCISES}/{exercise_id}", headers=auth_headers).status_code == 200
+    assert (
+        client.get(f"{EXERCISES}/{exercise_id}", headers=auth_headers).status_code
+        == 200
+    )
 
 
 # --- Ownership --------------------------------------------------------------
@@ -172,9 +179,7 @@ def test_create_workout_rejects_unknown_fields(client, auth_headers):
 def test_patch_workout_validates_input(client, auth_headers, body):
     workout_id = create_workout(client, auth_headers).json()["workout_id"]
 
-    response = client.patch(
-        f"{WORKOUTS}/{workout_id}", json=body, headers=auth_headers
-    )
+    response = client.patch(f"{WORKOUTS}/{workout_id}", json=body, headers=auth_headers)
 
     assert response.status_code == 422
 

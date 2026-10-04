@@ -2,9 +2,8 @@
 
 from datetime import date
 
-import streamlit as st
-
 import api_client
+import streamlit as st
 import ui
 
 SELECTED_KEY = "selected_workout_id"
@@ -33,7 +32,7 @@ def _workout_label(workout: dict) -> str:
 
 def _log_tab(token: str) -> None:
     with st.form("log_workout_form", clear_on_submit=True):
-        workout_date = st.date_input("Date", value=date.today())
+        workout_date = st.date_input("Date", value="today")
         minutes = st.number_input(
             "Duration (minutes)", min_value=1, max_value=1440, value=45, step=5
         )
@@ -54,9 +53,7 @@ def _log_tab(token: str) -> None:
     )
     if ok:
         st.session_state[SELECTED_KEY] = workout["workout_id"]
-        st.session_state[FLASH_KEY] = (
-            "Workout created. Add its exercises below."
-        )
+        st.session_state[FLASH_KEY] = "Workout created. Add its exercises below."
         st.session_state[GOTO_KEY] = "History"
         st.rerun()
 
@@ -163,9 +160,7 @@ def _edit_workout_form(token: str, workout: dict) -> None:
             max_value=1440,
             value=int(workout["duration_minutes"]),
         )
-        notes = st.text_area(
-            "Notes", value=workout["notes"] or "", max_chars=5000
-        )
+        notes = st.text_area("Notes", value=workout["notes"] or "", max_chars=5000)
         saved = st.form_submit_button("Save changes", type="primary")
 
     if saved:
@@ -211,9 +206,7 @@ def _history_tab(token: str, workouts: list[dict], exercises: list[dict]) -> Non
         (i for i, w in enumerate(ordered) if w["workout_id"] == selected_id), 0
     )
 
-    chosen = st.selectbox(
-        "Workout", ordered, index=index, format_func=_workout_label
-    )
+    chosen = st.selectbox("Workout", ordered, index=index, format_func=_workout_label)
     st.session_state[SELECTED_KEY] = chosen["workout_id"]
 
     ok, workout = ui.call(api_client.get_workout, token, chosen["workout_id"])
@@ -255,12 +248,15 @@ def render() -> None:
         st.session_state[SECTION_KEY] = goto
     st.session_state.setdefault(SECTION_KEY, SECTIONS[0])
 
-    section = st.segmented_control(
-        "Section",
-        SECTIONS,
-        key=SECTION_KEY,
-        label_visibility="collapsed",
-    ) or SECTIONS[0]
+    section = (
+        st.segmented_control(
+            "Section",
+            SECTIONS,
+            key=SECTION_KEY,
+            label_visibility="collapsed",
+        )
+        or SECTIONS[0]
+    )
 
     if section == "History":
         _history_tab(token, workouts, exercises)

@@ -1,11 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
-
 from auth import CurrentUser
 from dependencies import DatabaseSession, get_visible_exercise_or_404
+from fastapi import APIRouter, HTTPException, Query, status
 from models import User, Workout, WorkoutExercise
 from schemas import (
     WorkoutCreate,
@@ -16,6 +13,8 @@ from schemas import (
     WorkoutResponse,
     WorkoutUpdate,
 )
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
 
 router = APIRouter(
     prefix="/workouts",

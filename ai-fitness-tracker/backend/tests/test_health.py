@@ -4,13 +4,12 @@ ChromaDB and Ollama checks are replaced with fixed answers, so no real
 services are needed. The database check uses the per-test SQLite database.
 """
 
-import pytest
-from sqlalchemy.exc import SQLAlchemyError
-
 import main
+import pytest
 from database import get_db
 from main import app
 from rag_health import HEALTHY, UNHEALTHY
+from sqlalchemy.exc import SQLAlchemyError
 
 
 @pytest.fixture()

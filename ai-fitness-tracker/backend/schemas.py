@@ -376,9 +376,7 @@ class WorkoutPlanCreate(RequestModel):
 class WorkoutPlanUpdate(PartialUpdateModel):
     """Request schema for updating a workout plan."""
 
-    non_nullable_fields: ClassVar[frozenset[str]] = frozenset(
-        {"plan_name", "goal"}
-    )
+    non_nullable_fields: ClassVar[frozenset[str]] = frozenset({"plan_name", "goal"})
 
     plan_name: str | None = Field(
         default=None,
