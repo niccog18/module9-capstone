@@ -527,7 +527,7 @@ def update_session_exercise(
     if plan_exercise.reps_max < plan_exercise.reps_min:
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,  # literal: the status constant was renamed across Starlette versions
             detail="reps_max must be greater than or equal to reps_min.",
         )
 
