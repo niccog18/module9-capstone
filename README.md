@@ -156,6 +156,24 @@ All configuration is provided through environment variables. Secrets are never c
 
 > **Training plans (plans, sessions, and prescriptions)** are fully implemented in the API and covered by tests; use the Swagger docs at `/docs` to work with them. A Streamlit page for plans is not built yet.
 
+### Screenshots
+
+**AI assistant**, with the source documents and match confidence:
+
+![AI assistant answering with sources](ai-fitness-tracker/screenshots/assistant-answer.png)
+
+**Exercise library**:
+
+![Exercise library](ai-fitness-tracker/screenshots/exercise-library.png)
+
+**Workout history**:
+
+![Workout history](ai-fitness-tracker/screenshots/workouts-history.png)
+
+**Dashboard**:
+
+![Dashboard](ai-fitness-tracker/screenshots/dashboard.png)
+
 ## API Reference
 
 Base path: `/api/v1` (the health check is at `/health`). Interactive docs are available at `/docs`.
